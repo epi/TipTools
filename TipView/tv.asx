@@ -1,0 +1,1780 @@
+; tipview v1.0 by epi/trs^o.s.
+
+        org     $80
+a0      org     *+2
+a1      org     *+2
+a2      org     *+2
+a3      org     *+2
+even    org     *+1
+cnt     org     *+1
+dlicnt  org     *+1
+files   org     *+1
+isLoaded org    *+1
+fpos    org     *+1
+fdpos   org     *+1
+mode    org     *+1
+
+        org     $8c00
+
+font    ins     'neo6.fnt'
+
+maindl  dta     d'ppppppp'
+        dta     $c2,a(mainsc),$30,2,2,2,2,2,2,2,2,2,2,2,2,$82,$30,2
+        dta     $41,a(maindl)
+                                                   
+mainsc  dta     c'  TIPview v1.0 by Epi/Trs^O.S.  '
+screen  org     *+48
+dirmask org     *+12
+        org     *+54
+name    org     *+14                 3
+        org     *+50
+wdthtxt org     *+8
+wdthnum org     *+6                  5
+        org     *+18
+hghttxt org     *+8
+hghtnum org     *+6                  7
+        org     *+18
+clrstxt org     *+8
+clrsnum org     *+6                  7
+        org     *+18
+bplntxt org     *+8
+bplnnum org     *+6                  7
+        org     *+32*2
+        org     *+16
+msgtxt  org     *+16                 15
+        org     *+32                 16
+        dta     c'  freeware  (c) 2004 Tristesse  '
+
+tipViewer
+        mva     #0      isLoaded
+        sta     files
+        lda     $0301
+        ora     #'0'
+        sta     dirname+1
+        jsr     makeMainScreen
+        ldx     <msgDirectory
+        ldy     >msgDirectory
+        jsr     displayMessage
+tipViewerMainLoop
+        jsr     displayDirectory
+        jsr     displayDirMask
+tipv06  lda     files
+        seq:jsr displayCursor
+        jsr     getkey
+        sty     a3
+        pha:lda files
+        seq:jsr displayCursor
+        pla:ldy a3
+        cpy     #33
+        bne     tipV00
+        jsr     readDirectory
+        jmp     tipViewerMainLoop
+tipV00  cpy     #28
+        bne     tipv12
+        jmp     exitToDos
+tipv12  cmp     #127
+        bne     tipv08
+        lda     isLoaded
+        beq     tipViewerMainLoop
+        jsr     showImage
+        jmp     tipViewerMainLoop
+tipv08  cmp     #'-'
+        bne     tipv09
+        lda     fpos
+        beq     tipv0a
+        dec     fpos
+        bpl     tipv0b          !
+tipv0a  lda     fdpos
+        beq     tipv0b
+        dec     fdpos
+tipv0b  jmp     tipViewerMainLoop
+tipv09  cmp     #'='
+        bne     tipv01
+        lda     files
+        cmp     #12
+        bcs     tipv16
+        ldx:inx fpos
+        cpx     files
+        bcs     tipViewerMainLoop
+        inc     fpos
+        bne     tipViewerMainLoop
+tipv16  lda     fpos
+        cmp     #10
+        bcs     tipv0d
+        inc     fpos
+        bpl     tipv0b
+tipv0d  lda     fdpos
+        adc     #10             +
+        cmp     files
+        beq     tipv0b
+        inc     fdpos
+        bne     tipv0b          !
+tipV01  cmp     #'1'
+        bcc     tipV0c
+        cmp     #':'
+        bcs     tipV0c
+        sta     dirname+1
+        jsr     changeDisk
+        jmp     tipViewerMainLoop
+tipv0c  cpy     #12
+        bne     tipv0b
+        jsr     getFilename
+        ldy     #15
+        lda     (a1),y
+        bmi     enterSubdir
+        jsr     initImage
+        jsr     showImage
+        jmp     tipViewerMainLoop
+
+enterSubdir
+        ldx     #$ff
+        lda     #'*'
+enterSubdir_0
+        inx:cmp dirname,x
+        bne     enterSubdir_0
+        lda     fname
+        cmp     #'<'
+        beq     enterSubdir_up
+        ldy     #0
+enterSubdir_1
+        lda     fname,y
+        cmp     #'.'
+        beq     enterSubdir_2
+        sta     dirname,x+
+        iny:bpl enterSubdir_1   !
+enterSubdir_2
+        ldy     #4
+enterSubdir_3
+        mva     subdirMask,y    dirname+4,x-
+        dey:bpl enterSubdir_3
+enterSubdir_6
+        jsr     displayDirMask
+        jsr     readDirectory
+        jmp     tipviewerMainLoop
+enterSubdir_up
+        dex:lda dirname-1,x
+        cmp     #'>'
+        beq     enterSubdir_4
+        cmp     #':'
+        bne     enterSubdir_up
+enterSubdir_4
+        ldy     #4
+enterSubdir_5
+        mva     subdirMask,y    dirname+3,x-
+        dey:bne enterSubdir_5
+        beq     enterSubdir_6   !
+
+changeDisk
+        ldy     #1
+        lda     $0700
+        cmp     #'S'
+        sne:ldy #0
+        ldx     #0
+tipv50  mva     subdirMask,y+   dirname+3,x+
+        cmp     #$9b
+        bne     tipv50
+        jsr     displayDirMask
+
+readDirectory
+        mva     #0      files
+        sta     fpos
+        sta     fdpos
+        mwx     #screen+$22 a1
+        ldx     #10
+readDirClrScrLoop
+        ldy     #10
+        lda     #$20
+        sta:rpl (a1),y-
+        jsr     nextDListLine_1
+        dex:bpl readDirClrScrLoop
+        ldx     #16
+        mva     #3      $0342,x
+        mva     #6      $034a,x
+        mwa     #dirname $0344,x
+        jsr     cio
+        mwa     #fnamebuf a1
+        mwa     #fname  $0344,x
+        lda     #'*'
+        cmp     dirname+3
+        beq     readDirLoop
+        cmp     dirname+4
+        beq     readDirLoop
+        ldy     #14
+        mva:rpl updir,y fname,y-
+        bmi     readDirContinue !
+readDirLoop
+        ldx     #16
+        mva     #5      $0342,x
+        mwa     #50     $0348,x
+        jsr     cio
+        lda     fname
+        cmp     #'0'
+        bcc     readDirContinue
+        cmp     #':'
+        bcs     readDirContinue
+        lda     isLoaded
+        beq     readDirRet
+        ldx     <msgSelectFile
+        ldy     >msgSelectFile
+        jsr     displayMessage
+        ldx     #$10
+readDirRet
+        mva     #12     $0342,x
+        jsr     $e456
+        lda     files
+        beq     readDirRet2
+        ldx     <msgSelectFile
+        ldy     >msgSelectFile
+        jsr     displayMessage
+readDirRet2
+        jmp     restoreScreen
+readDirContinue
+        lda     fname+1
+        cmp     #':'
+        beq     readDir_1
+        lda     fname+10
+        cmp     #'D'+$80
+        bne     readDir_2
+readDir_1
+        mva     #'['    fname+10
+        mva     #'D'    fname+11
+        mva     #']'    fname+12
+        ldy     #$0f
+        mva     #$ff    (a1),y
+        bmi     readDir_3       !
+readDir_2
+        ldx     #EXTS-1
+readDir_4
+        ldy     #3
+readDir_7
+        lda     fname+10,y
+        cmp     extensions,x
+        beq     readDir_5
+readDir_6
+        dex:dey
+        bpl     readDir_6
+        txa:bmi readDirLoop
+        bpl     readDir_4       !
+readDir_5
+        dex:dey
+        bpl     readDir_7
+        inx:txa
+:2      lsr     @
+        ldy     #15
+        sta     (a1),y
+readDir_3
+        ldy     #10
+        mva:rpl fname+2,y       (a1),y-
+        lda     #16
+        jsr     nextDListLine_1
+        inc     files
+        jmp     readDirLoop
+
+initImage
+        tax:stx mode
+        mva     loadImageVec_l,x        openImage+1
+        mva     loadImageVec_h,x        openImage+2
+        mva     showImageVec_l,x        showImage_1+1
+        mva     showImageVec_h,x        showImage_1+2
+        mva     makeDListVec_l,x        makeDisplayList+1
+        mva     makeDListVec_h,x        makeDisplayList+2
+        jsr     loadImage
+        jmp     makeDisplayList
+
+loadImage
+        ldx     <msgLoading
+        ldy     >msgLoading+1
+        jsr     displayMessage
+        ldx     #0
+loadImage_1
+        lda     dirname,x
+        cmp     #'*'
+        beq     loadImage_2
+        sta     filenam,x+
+        bpl     loadImage_1
+loadImage_2
+        ldy     #0
+loadImage_3
+        mva     fname,y+        filenam,x+
+        cmp     #$9b
+        bne     loadImage_3
+        ldx     #16
+        mva     #3      $0342,x
+        mwa     #filenam $0344,x
+        mva     #4      $034a,x
+        jsr     cio
+        lda     mode
+        seq:jsr displayImageInfo
+openImage       jmp     $0000
+showImage       mva     #0      even
+showImage_1     jmp     $0000
+makeDisplayList jmp     $0000
+
+getFilename
+        mva     #0      a1+1
+        lda     fpos
+        add     fdpos
+        asl     @
+        rol     a1+1
+        asl     @
+        rol     a1+1
+        asl     @
+        rol     a1+1
+        asl     @
+        rol     a1+1
+        adc     <fnamebuf
+        sta     a1
+        lda     >fnamebuf
+        adc:sta a1+1
+        ldy     #0
+tipv0e  mva     (a1),y fname,y
+        cmp     #' '
+        beq     tipv0f
+        iny:cpy #8
+        bne     tipv0e
+tipv0f  tya:tax
+        mva     #'.'    fname,x+
+        ldy     #8
+tipv10  mva     (a1),y+      fname,x+
+        cpy     #11
+        bne     tipv10
+        mva     #155    fname,x+        
+        rts
+
+getkeyv jsr     getkey
+        cmp     #'-'
+        bne     getkeyx_1
+getkeyx_up
+        lda     fpos
+        beq     getkeyx_2
+        dec     fpos
+        bpl     getkeyx_3       !
+getkeyx_2
+        lda     fdpos
+        beq     getkeyx_ret
+        dec     fdpos
+getkeyx_3
+        jsr     getFilename
+        ldy     #15
+        lda     (a1),y
+        bmi     getkeyx_up
+getkeyx_show
+        mvx     #0      ^4e
+        stx     $022f
+        stx     ^40
+        stx     $02c8
+        stx     ^1a
+        stx     $026f
+        stx     ^1b
+        stx     $021a
+        lsr     ^4e
+        jsr     initImage
+:2      pla
+        jmp     showImage
+getkeyx_ret
+        rts
+getkeyx_1
+        cmp     #'='
+        bne     getkeyx_ret
+getkeyx_down
+        lda     files
+        cmp     #12
+        bcs     getkeyx_4
+        ldx:inx fpos
+        cpx     files
+        bcs     getkeyx_ret
+        inc     fpos
+        bne     getkeyx_5       !
+getkeyx_4
+        lda     fpos
+        cmp     #10
+        bcs     getkeyx_6
+        inc     fpos
+        bne     getkeyx_5       !
+getkeyx_6
+        lda     fdpos
+        adc     #10             +
+        cmp     files
+        beq     getkeyx_ret
+        inc     fdpos
+getkeyx_5
+        jsr     getFilename
+        ldy     #15
+        lda     (a1),y
+        bmi     getkeyx_down
+        bpl     getkeyx_show    !
+
+dliAtMainScreen
+        pha
+        sta     ^4a
+        lda     #1
+        eor:sta dlicnt
+        bne     razPierwszy
+        mva     #$94    ^18
+        pla:rti
+razPierwszy
+        mva     #$82    ^18
+        pla
+        rti
+
+displayMessage
+        stx     a1
+        sty     a1+1
+        ldy     #15
+        mva:rpl (a1),y msgtxt,y-
+        rts
+
+displayCursor
+        mva     #0      a1
+        lda     fpos
+        lsr     @
+        ror     a1
+        lsr     @
+        ror     a1
+        lsr     @
+        ror     a1
+        sta     a1+1
+        lda     <screen+$21
+        add:sta a1
+        lda     >screen+$21
+        adc:sta a1+1
+        ldy     #12
+displayCursorLoop
+        lda     (a1),y
+        eor     #$80
+        sta     (a1),y-
+        bpl     displayCursorLoop
+        rts
+
+makeMainScreen
+        lda     #$20
+        ldy     #0
+clrScrLoop
+        sta     screen,y
+        sta     screen+$a0,y
+        dey:bne clrScrLoop
+makeMainScreen2
+        jsr     waitFrame
+        mwa     #dliAtMainScreen $0200
+        ldy     #0
+        sty     dlicnt
+        sty     $026f
+        asl     ^4e
+        mwa     #maindl $0230
+        mva     #$94    $02c8
+        sta     $02c6
+        mva     #$0e    $02c5
+        mva     #>font  $02f4
+        mva     #$21    $022f
+        rts
+
+displayImageInfo
+        ldy     #0
+displayImageInfo_8
+        lda     fname,y
+        cmp     #$9b
+        beq     displayImageInfo_9
+        sta     name,y+
+        bne     displayImageInfo_8
+displayImageInfo_9
+        lda     #$20
+displayImageInfo_5
+        sta     name,y+
+        cpy     #14
+        bne     displayImageInfo_5
+        ldy     #6
+displayImageInfo_7
+        mva     wdthtxt_,y wdthtxt,y
+        mva     hghttxt_,y hghttxt,y
+        mva     clrstxt_,y clrstxt,y
+        mva     bplntxt_,y bplntxt,y-
+        bpl     displayImageInfo_7
+        ldx     mode
+        mva     extHeight,x     a3
+        mwa     #hghtnum        a2
+        jsr     displayBcdNumber
+        ldx     mode
+        mva     extWidth,x      a3
+        mwa     #wdthnum        a2
+        jsr     displayBcdNumber
+        ldx     mode
+        mva     extColors,x     a3
+        mwa     #clrsnum a2
+        jsr     displayBcdNumber
+        ldx     mode
+        lda     extPlanes,x
+        ora     #'0'
+        sta     bplnnum+2
+        inc     clrsnum+2
+        rts
+
+displayDirMask
+        ldy     #15
+        lda     #' '
+        sta:rpl dirmask,y-
+        lda     #$9b
+displayDirMask_1
+        iny:cmp dirname,y
+        bne     displayDirMask_1        
+        cpy     #16
+        bcs     displayDirMask_2
+        tya:lsr @
+        eor     #$ff
+        add:tax #8
+        ldy     #0
+displayDirMask_3
+        lda     dirname,y+
+        cmp     #$9b
+        beq     displayDirMask_ret
+        sta     dirmask,x+
+        bne     displayDirMask_3        !
+displayDirMask_2
+        ldx     #14
+        mva:rpl dirname-1,y-    dirmask,x-
+        mva     #'.'    dirmask
+        sta     dirmask+1
+        sta     dirmask+2
+displayDirMask_ret
+        rts
+
+cio     jsr     $e456
+        smi:rts
+errorx  pla:pla
+error   mva     #0      isLoaded
+        sty     a3
+        cmp     $022f
+        sne:jsr makeMainScreen2
+        lda     #$20
+        ldy     #13
+error2  sta     wdthtxt,y
+        sta     hghttxt,y
+        sta     clrstxt,y
+        sta     bplntxt,y
+        sta     name,y-
+        bpl     error2
+:2      pla
+        ldx     #16
+        mva     #12     $0342,x
+        jsr     $e456
+        lda     a3
+        cmp     #174
+        beq     error3
+        cmp     #150
+        beq     error3
+        mwa     #errorNum a2
+        jsr     displayBcdNumber
+        ldx     <msgError
+        ldy     >msgError
+        jsr     displayMessage
+        jsr     getkey
+error4  lda     files
+        beq     error0
+        ldx     <msgSelectFile
+        ldy     >msgSelectFile
+        bne     error1
+error0  ldx     <msgDirectory
+        ldy     >msgDirectory
+error1  jsr     displayMessage
+        jmp     tipViewerMainLoop
+
+error3  jsr     changeDisk
+        jmp     error4
+
+displayBcdNumber
+        mwa     #0      a1
+	ldx     #8
+	sed
+m_14    asl     a3
+        lda:adc a1
+        sta     a1
+        rol     a1+1
+	dex:bne m_14
+	cld
+	ldy     #2
+        lda     a1
+	jsr     pbcd2
+        lda     a1+1
+        jsr     pbcd1
+        lda     (a2),0
+        cmp     #'0'
+        seq:rts
+        mva     #' '    (a2),y+
+        lda     (a2),y
+        cmp     #'0'
+        seq:rts
+        mva     #' '    (a2),y
+        rts
+
+displayDirectory
+        lda     files
+        beq     displayDirRet
+        mwa     #screen+34 a2
+        mva     #0      a1+1
+        lda     fdpos
+        asl     @
+        rol     a1+1
+        asl     @
+        rol     a1+1
+        asl     @
+        rol     a1+1
+        asl     @
+        rol     a1+1
+        add     <fnamebuf
+        sta     a1
+        lda     >fnamebuf
+        adc:sta a1+1
+        ldx     files
+        beq     displayDirRet
+        dex:cpx #11
+        bcc     displayDirLoop
+        ldx     #10     
+displayDirLoop
+        ldy     #10
+        mva:rpl (a1),y (a2),y-
+        lda     #$10
+        jsr     nextDListLine_1
+        lda     #32
+        add:sta a2
+        scc:inc a2+1
+        dex:bpl displayDirLoop
+displayDirRet
+        rts
+
+pbcd2   pha
+	jsr     pbcd1
+	pla
+:4      lsr     @
+pbcd1   and     #%00001111
+	ora     #'0'
+        sta     (a2),y-
+	rts
+
+getkey  lda     #$ff
+getkey2 ldx     #0
+        stx     $4d
+        cmp     $02fc
+        beq     getkey2
+        ldy:sta $02fc
+        lda     ($79),y
+        rts
+
+STD_frame       equ     $4100
+
+loadStandardFrame
+        ldx     #$10
+        mwa     #$1e00  $0348,x
+        mwa     #STD_frame      $0344,x
+        mva     #7      $0342,x
+        rts
+
+waitFrame
+        lda     $14
+        cmp:req $14
+        rts
+
+setDisplay
+        mwa     #dl1    $0230
+        rts
+
+initDList
+        mwa     #dl1    storeDList1+1
+        mwa     #dl2    storeDList2+1
+        mwa     #$00    a1
+        rts
+
+storeDListx
+        jsr     storeDList2
+ 
+storeDList1
+        sta     dl1
+        inw     storeDList1+1
+        rts
+
+storeDList2
+        sta     dl2
+        inw     storeDList2+1
+        rts
+
+nextDListLine
+        lda     #40
+nextDListLine_1
+        add:sta a1
+        scc:inc a1+1
+        rts
+
+restoreScreen
+        jsr     waitFrame
+        mva     #0      dlicnt
+        asl     ^4e
+        rts
+
+exitToDos
+        ldx     #0
+        mva     #12     $0342,x
+        jsr     $e456
+        mva     #3      $0342,x
+        mva     #12     $034a,x
+        mwa     #en     $0344,x
+        jsr     $e456
+        jmp     ($0a)
+
+unknownFileFormat
+        ldy     #127
+        jmp     error
+
+* ----------------------------------------------------------------- Type: TIP
+; Taquart Interlace Picture
+
+TIP_gr09frame   equ   $4010
+TIP_gr10frame   equ   $52b8
+TIP_gr11frame   equ   $6560
+
+TIP_loadImage
+        mva     #7      $0342,x
+        mwa     #head   $0344,x
+        mwa     #9      $0348,x
+        jsr     cio
+        lda     head
+        cmp     #'T'
+        bne     unknownFileFormat
+        lda     head+1
+        cmp     #'I'
+        bne     unknownFileFormat
+        lda     head+2
+        cmp     #'P'
+        bne     unknownFileFormat
+        lda     ver
+        cmp     #$01
+        bne     unknownFileFormat
+        lda     cpr
+        cmp     #$00
+        bne     unknownFileFormat
+        lda     width
+        cmp     #$a0
+        bne     unknownFileFormat
+        lda     height
+        cmp     #120
+        bcs     unknownFileFormat
+        sta     extHeight
+        jsr     displayImageInfo
+        lda     <TIP_gr09frame
+        ldy     >TIP_gr09frame
+        jsr     TIP_loadFrame
+        lda     <TIP_gr10frame
+        ldy     >TIP_gr10frame
+        jsr     TIP_loadFrame
+        lda     <TIP_gr11frame
+        ldy     >TIP_gr11frame
+        jsr     TIP_loadFrame
+        bpl     closeImage_1    !
+closeImage
+        jsr     cio
+closeImage_1
+        ldx     #$10
+        mva     #12     $0342,x
+        jsr     $e456
+        sty     isLoaded
+        ldx     <msgViewKeys
+        ldy     >msgViewKeys
+        jmp     displayMessage
+
+TIP_loadFrame
+        ldx     #$10
+        sta     $0344,x
+        tya:sta $0345,x
+        mwa     fsize   $0348,x
+        jmp     cio
+
+TIP_makeDisplayList
+        jsr     initDList
+        lda     #120
+        sub     height
+        and:tax #$fe
+        lda     #0
+TIP_emptyln
+        cpx     #0
+        beq     TIP_emptyln2
+        jsr     storeDListx
+        dex:bpl TIP_emptyln     !
+TIP_emptyln2
+        lda     #$80
+        jsr     storeDListx
+        ldx     height
+TIP_makeDList_1
+        jsr     TIP_makeDList_11
+        lda     a1
+        add     <TIP_gr09frame
+        jsr     storeDList1
+        lda     a1+1
+        adc     >TIP_gr09frame
+        jsr     storeDList1
+        lda     a1
+        add     <TIP_gr10frame
+        jsr     storeDList2
+        lda     a1+1
+        adc     >TIP_gr10frame
+        jsr     storeDList2
+        dex:beq TIP_makeDList_2
+        jsr     nextDListLine
+        jsr     TIP_makeDList_11
+        lda     a1
+        add     <TIP_gr10frame
+        jsr     storeDList1
+        lda     a1+1
+        adc     >TIP_gr10frame
+        jsr     storeDList1
+        lda     a1
+        add     <TIP_gr09frame
+        jsr     storeDList2
+        lda     a1+1
+        adc     >TIP_gr09frame
+        jsr     storeDList2
+        dex:beq TIP_makeDList_2
+        jsr     nextDListLine
+        bne     TIP_makeDList_1 !
+TIP_makeDList_2
+        jmp     makeIntDList_end
+
+TIP_makeDList_11
+        lda     #$4f
+        jsr     storeDListx
+        lda     a1
+        add     <TIP_gr11frame
+        jsr     storeDListx
+        lda     a1+1
+        adc     >TIP_gr11frame
+        jsr     storeDListx
+        lda     #$cf
+        jmp     storeDListx
+
+TIP_showImage
+        ldx     #8
+        mva:rpl clrt10,x $02c0,x-
+        mwa     #TIP_dli    $0200
+showImage_ip
+        jsr     setDisplay
+        mwa     #0      $021a
+        mwa     #TIP_vbl    $0228
+        inc     $021a
+        asl     ^4e
+showImage_all
+        mva     #34     $022f
+        jsr     waitFrame
+        jsr     getkeyv
+        inc     ^4e
+        mva     #0      $022f
+        sta     ^40
+        sta     $021a
+        lsr     ^4e
+        jmp     makeMainScreen2
+
+clrt10  dta     0,2,4,6,8,10,12,14,0
+
+TIP_vbl mva     #1      $021a
+        eor:sta even
+        sta     cnt
+        bne     TIP_v0
+        mwa     #dl1    ^42
+        rts
+TIP_v0  mwa     #dl2    ^42
+        rts
+
+TIP_dli pha
+        lda     #%11000001
+        sta     ^4a
+        sta     ^1b
+        inc:lda cnt
+        and     #1
+        beq     v2
+        lda     #%01000001
+        sta     ^4a
+        sta     ^1b
+        pla
+        rti
+v2      lda     #%10000001
+        sta     ^4a
+        sta     ^1b
+        pla
+        rti
+
+* ----------------------------------------------------------------- Type: GR8
+; Graphics 8
+
+GR8_frame       equ     $4100
+
+GR8_loadImage
+        lda     mode
+        cmp     #1
+        bne     GR8_loadImage_1
+        mva     #'3'    wdthnum
+        mva     #'2'    wdthnum+1
+GR8_loadImage_1
+        jsr     loadStandardFrame
+        jmp     closeImage
+
+GR8_makeDisplayList
+        ldx     #$4f
+GR8_makeDisplayList_C0
+        mva     #$70    dl1
+        sta     dl1+1
+        sta     dl1+2
+        stx     dl1+3
+        stx     dl1+3+3+95
+        mva     #0      dl1+4
+        sta     dl1+4+3+95
+        mva     >GR8_frame      dl1+5
+        mva     >GR8_frame+$f00 dl1+5+3+95
+        mva     #$41    dl1+3+3+95+3+95
+        mwa     #dl1    dl1+3+3+95+3+95+1
+        ldy     #94
+        txa:and #$0f    
+GR8_makeDisplayList_1
+        sta     dl1+3+3,y
+        sta     dl1+3+3+95+3,y
+        dey:bpl GR8_makeDisplayList_1
+        rts
+
+GR8_showImage
+        mva     #34     $022f
+        jsr     setDisplay
+        mva     #0      $02c6
+        sta     $02c8
+        mva     #14     $02c5
+GR8_showImage_1
+        jsr     getkeyv
+        cpy     #39
+        bne     GR8_showImage_2
+        lda     #10
+        eor:sta $02c6
+        lda     #14
+        eor:sta $02c5
+        bpl     GR8_showImage_1 !
+GR8_showImage_2
+        mva     #0      $022f
+        jmp     makeMainScreen2
+
+* ----------------------------------------------------------------- Type: GR9
+; Graphics 9
+
+GR9_loadImage
+        jsr     loadStandardFrame
+        jmp     closeImage
+
+GR9_showImage
+        jsr     setDisplay
+        mva     #0      $02c8
+        mva     #$40    $026f
+GR9_showImage_1
+        jmp     showImage_all
+
+* ----------------------------------------------------------------- Type: MIC
+; Graphics 15 (Kleks)
+
+MIC_frame       equ     $4100
+
+MIC_colors      dta     0,4,8,12
+
+MIC_loadImage
+        jsr     loadStandardFrame
+MIC_loadImage_1
+        jsr     cio
+        mva     #0      MIC_colors
+        mva     #4      MIC_colors+1
+        mva     #8      MIC_colors+2
+        mva     #12     MIC_colors+3
+MIC_loadImage_2
+        mwa     #MIC_colors     $0344,x
+        mwa     #4      $0348,x
+        jsr     $e456
+        jmp     closeImage_1
+
+MIC_makeDisplayList
+        ldx     #$4e 
+        jmp     GR8_makeDisplayList_C0
+
+MIC_showImage
+        mva     #34     $022f
+        jsr     setDisplay
+        mva     MIC_colors      $02c8
+        mva     MIC_colors+1    $02c4
+        mva     MIC_colors+2    $02c5
+        mva     MIC_colors+3    $02c6
+        jsr     getkeyv
+        mva     #0      $022f
+        jmp     makeMainScreen2
+
+* ----------------------------------------------------------------- Type: PIC
+; Koala compressed image
+
+PIC_frame       equ     $4100
+PIC_temp        equ     $6000
+
+PIC_header      dta     $ff,$80,$c9,$c7,$1a,$00,$01,$01
+
+PIC_loadImage_2
+        mva     #0      MIC_colors+0
+        mva     #4      MIC_colors+1
+        mva     #8      MIC_colors+2
+        mva     #12     MIC_colors+3
+        mwa     #PIC_frame+27   $0344,x
+        mwa     #$1e00-27       $0348,x
+        jsr     cio
+        jmp     MIC_loadImage_2
+
+PIC_loadImage
+        ldx     #$10
+        mva     #7      $0342,x
+        mwa     #PIC_frame      $0344,x
+        mwa     #27     $0348,x
+        jsr     cio
+        ldy     #7
+PIC_loadImage_1
+        lda     PIC_frame,y
+        cmp     PIC_header,y
+        bne     PIC_loadImage_2
+        dey:bpl PIC_loadImage_1
+        mva     PIC_frame+13    MIC_colors+1
+        mva     PIC_frame+14    MIC_colors+2
+        mva     PIC_frame+15    MIC_colors+3
+        mva     PIC_frame+17    MIC_colors+0
+        mva     <PIC_temp       $0344,x
+        sta     $0348,x
+        sta     a0
+        mva     >PIC_temp       $0345,x
+        sta     a0+1
+        mva     >$2000  $0349,x
+        jsr     $e456
+        bpl     PIC_loadImage_3
+        cpy     #136
+        jne     error
+PIC_loadImage_3
+        mwa     #PIC_frame      a1
+        mva     #96     cnt
+        mva     #0      even
+        sta     a3+1
+PIC_loadImage_3a
+        mva     (a0),0      a3
+        inw     a0
+PIC_loadImage_3b
+        and     #$7f
+        beq     PIC_loadImage_4
+        tax:dex
+        stx     a2
+        mva     #0      a2+1
+        beq     PIC_loadImage_5 !
+PIC_loadImage_4
+        lda     (a0),0
+        sta     a2+1
+        inw     a0
+        lda     (a0),0
+        sub     #1
+        sta     a2
+        scs:dec a2+1
+        inw     a0
+PIC_loadImage_5
+        lda:tax (a0),0
+        inw     a0
+PIC_loadImage_8
+        jsr     PIC_loadImage_set
+        lda     a3
+        bpl     PIC_loadImage_6
+        lda:tax (a0),0
+        inw     a0
+PIC_loadImage_6
+        lda     a2
+        beq     PIC_loadImage_7
+        dec     a2
+        jmp     PIC_loadImage_8
+PIC_loadImage_7
+        ora     a2+1
+        beq     PIC_loadImage_9
+        dec     a2+1
+        dec     a2
+        bne     PIC_loadImage_8
+PIC_loadImage_9
+        lda     a3
+        bpl     PIC_loadImage_3a
+        stx:txa a3
+        jmp     PIC_loadImage_3b
+
+PIC_loadImage_set
+        txa:sta (a1),0
+        lda     #$50
+        jsr     nextDListLine_1
+        dec     cnt
+        bne     PIC_loadImage_set_ret
+        mva     #96     cnt
+        lda     #1
+        eor:sta even
+        beq     PIC_loadImage_set_1
+        lda     #40
+        add     a3+1
+PIC_loadImage_set_2
+        sta     a1
+        mva     >PIC_frame      a1+1
+PIC_loadImage_set_ret
+        rts
+PIC_loadImage_set_1
+        inc:lda a3+1
+        cmp     #40
+        bne     PIC_loadImage_set_2
+:2      pla
+        jmp     closeImage_1
+
+* ----------------------------------------------------------------- Type: INP
+; InterPainter
+
+INP_frame1      equ     $4060
+INP_frame2      equ     $6060
+
+INP_loadImage
+        ldx     #$10
+        mva     #7      $0342,x
+        mwa     #INP_frame1     $0344,x
+        mwa     #$1f40  $0348,x
+        jsr     cio
+        mva     >INP_frame2     $0345,x
+        jmp     MIC_loadImage_1
+
+INP_makeDisplayList
+        ldx     #$4e
+        mva     #$70    dl1
+        sta     dl1+1
+        sta     dl2
+        sta     dl2+1
+        mva     #$30    dl1+2
+        sta     dl2+2
+        stx     dl2+3
+        stx     dl2+3+3+99
+        stx     dl1+3
+        stx     dl1+3+3+99
+        mva     #$60    dl1+4
+        sta     dl2+4
+        mva     #$00    dl1+4+3+99
+        sta     dl2+4+3+99
+        mva     >INP_frame1     dl1+5
+        mva     >INP_frame1+$fa0        dl1+5+3+99
+        mva     >INP_frame2     dl2+5
+        mva     >INP_frame2+$fa0        dl2+5+3+99
+        mva     #$41    dl1+3+3+99+3+99
+        sta     dl2+3+3+99+3+99
+        mwa     #dl2    dl1+3+3+99+3+99+1
+        mwa     #dl1    dl2+3+3+99+3+99+1
+        ldy     #98
+        lda     #$0e
+INP_makeDisplayList_1
+        sta     dl1+3+3,y
+        sta     dl1+3+3+99+3,y
+        sta     dl2+3+3,y
+        sta     dl2+3+3+99+3,y
+        dey:bpl INP_makeDisplayList_1
+        rts
+
+INP_showImage
+        mva     #34     $022f
+        mva     MIC_colors      $02c8
+        mva     MIC_colors+1    $02c4
+        mva     MIC_colors+2    $02c5
+        mva     MIC_colors+3    $02c6
+        jmp     showImage_ip
+
+* ----------------------------------------------------------------- Type: HIP
+; Hard Interlace Picture
+
+HIP_frame1      equ     $4060
+HIP_frame2      equ     $6060
+
+HIP_header      dta     $ff,$ff,$10,$60,$4f,$7f
+                dta     $ff,$ff,$10,$80,$4f,$9f
+
+HIP_clrtab      dta     0,0,2,4,6,8,10,12,14
+HIP_clrtab2     dta     0,0,2,4,6,8,10,12,14
+
+HIP_loadImage
+        ldy     #8
+        mva:rpl HIP_clrtab2,y HIP_clrtab,y-
+        ldx     #$10
+        mva     #7      $0342,x
+        mwa     #HIP_frame1     $0344,x
+        mwa     #6      $0348,x
+        jsr     cio
+        ldy     #5
+HIP_loadImage_1
+        lda     HIP_header,y
+        cmp     HIP_frame1,y
+        bne     HIP_loadImage_2
+        dey:bpl HIP_loadImage_1
+        mwa     #HIP_frame2     $0344,x
+        mwa     #$1f40  $0348,x
+        jsr     cio
+        mwa     #HIP_frame1-6   $0344,x
+        mva     <$1f46  $0348,x
+        jmp     closeImage
+HIP_loadImage_2
+        mwa     #$1f3a  $0348,x
+        mva     <HIP_frame1+6   $0344,x
+        jsr     cio
+        mwa     #HIP_frame2     $0344,x
+        mva     <$1f40  $0348,x
+        jsr     cio
+        mwa     #HIP_clrtab     $0344,x
+        mwa     #9      $0348,x
+        jmp     closeImage
+
+HIP_makeDisplayList
+        jsr     initDList
+        lda     #$70
+:2      jsr     storeDListx
+        lda     #$b0
+        jsr     storeDListx
+        ldx     #99
+HIP_makeDL_1
+        lda     #$4f
+        jsr     storeDListx
+        lda     a1
+        add     <HIP_frame1
+        jsr     storeDList1
+        lda     a1+1
+        adc     >HIP_frame1
+        jsr     storeDList1
+        lda     a1
+        add     <HIP_frame2
+        jsr     storeDList2
+        lda     a1+1
+        adc     >HIP_frame2
+        jsr     storeDList2
+        jsr     nextDListLine
+        lda     #$cf
+        jsr     storeDListx
+        lda     a1
+        add     <HIP_frame2
+        jsr     storeDList1
+        lda     a1+1
+        adc     >HIP_frame2
+        jsr     storeDList1
+        lda     a1
+        add     <HIP_frame1
+        jsr     storeDList2
+        lda     a1+1
+        adc     >HIP_frame1
+        jsr     storeDList2
+        jsr     nextDListLine
+        dex:bpl HIP_makeDL_1
+        jmp     makeIntDList_end
+
+HIP_showImage
+        ldx     #7
+        mva:rpl HIP_clrtab,x    $02c0,x-
+        mwa     #HIP_dli        $0200
+        mva     #0      $02c8
+        jmp     showImage_ip
+
+HIP_dli pha
+        sta     ^4a
+        lda     even
+        bne     HIP_v2
+        lda     #%01000001
+        sta     ^1b
+        mva     #0      ^1a
+        lda     #%10000001
+        sta     ^4a
+        sta     ^1b
+        mva     HIP_clrtab+8    ^1a
+        pla
+        rti
+HIP_v2  lda     #%10000001
+        sta     ^1b
+        mva     HIP_clrtab+8    ^1a
+        lda     #%01000001
+        sta     ^4a
+        sta     ^1b
+        mva     #0      ^1a
+        pla
+        rti
+
+* ----------------------------------------------------------------- Type: CIN
+; Champion's Interlace
+
+CIN_frame1      equ     $4100
+CIN_frame2      equ     $6100
+CIN_bright0     equ     $8800
+CIN_bright1     equ     $8900
+CIN_bright2     equ     $8a00
+CIN_bright3     equ     $8b00
+
+CIN_loadImage
+        jsr     loadStandardFrame
+        jsr     cio
+        mva     >CIN_frame2     $0345,x
+        jsr     cio
+        mva     >CIN_bright0    $0345,x
+        mva     >$0400  $0349,x
+        jmp     closeImage
+
+CIN_makeDisplayList
+        jsr     initDList
+        lda     #$70
+:2      jsr     storeDListx
+        lda     #$e0
+        jsr     storeDList1
+        lda     #$f0
+        jsr     storeDList2
+        ldx     #$60
+
+CIN_makeDList_loop
+        lda     #$4f
+        jsr     storeDList1
+        lda     a1
+        jsr     storeDList1
+        lda     a1+1
+        add     >CIN_frame2
+        jsr     storeDList1
+        lda     #$4e
+        jsr     storeDList1
+        lda     a1
+        jsr     storeDList1
+        lda     a1+1
+        add     >CIN_frame1
+        jsr     storeDList1
+
+        lda     #$4f
+        jsr     storeDList2
+        jsr     nextDListLine
+        jsr     storeDList2
+        lda     a1+1
+        add     >CIN_frame2
+        jsr     storeDList2
+        lda     #$4e
+        jsr     storeDList2
+        lda     a1
+        jsr     storeDList2
+        lda     a1+1
+        add     >CIN_frame1
+        jsr     storeDList2
+        jsr     nextDListLine
+
+        dex:bne CIN_makeDList_loop
+makeIntDList_end
+        lda     #$41
+        jsr     storeDListx
+        lda     <dl1
+        jsr     storeDListx
+        lda     >dl1
+        jmp     storeDListx
+
+CIN_showImage
+        mva     #0      $022f
+        sta     $02c8
+        jsr     waitFrame
+        jsr     setDisplay
+        mwa     #CIN_dli_1      $0200
+        mva     #1      $026f
+        asl     ^4e
+        jmp     showImage_all
+
+CIN_dli_1
+        pha
+        txa:pha
+        ldx     #$00
+CIN_dli_11
+        lda     #$c0
+        sta     ^4a
+        sta     ^1b
+        mva     CIN_bright0,x ^1a
+        mva     CIN_bright1,x ^16
+        mva     CIN_bright2,x ^17
+        mva     CIN_bright3,x ^18
+        lda     #$00
+        sta     ^4a
+        sta     ^1b
+:2      inx
+        cpx     #$c0
+        bne     CIN_dli_11
+        mwa     #dl2    $0230
+        mwa     #CIN_dli_2      $0200
+        mva     #0      ^1a
+        pla:tax
+        pla:rti
+
+CIN_dli_2
+        pha
+        txa:pha
+        ldx     #$01
+CIN_dli_21
+        lda     #$c0
+        sta     ^4a
+        sta     ^1b
+        mva     CIN_bright0,x ^1a
+        mva     CIN_bright1,x ^16
+        mva     CIN_bright2,x ^17
+        mva     CIN_bright3,x ^18
+        lda     #$00
+        sta     ^4a
+        sta     ^1b
+:2      inx
+        cpx     #$c1
+        bne     CIN_dli_21
+        jsr     setDisplay
+        mwa     #CIN_dli_1      $0200
+        mva     #0      ^1a
+        pla:tax
+        pla:rti
+
+* ----------------------------------------------------------------- Type: CCI
+; Compressed CIN
+
+CCI_temp        equ     $2000
+
+CCI_header      dta     c'CIN 1.2 '
+
+CCI_loadImage
+        ldx     #$10
+        mva     #7      $0342,x
+        mwa     #CCI_temp       $0344,x
+        mwa     #8      $0348,x
+        jsr     cio
+        ldy     #7
+CCI_loadImage_1
+        lda     CCI_temp,y
+        cmp     CCI_header,y
+        jne     unknownFileFormat
+        dey:bpl CCI_loadImage_1
+
+        jsr     CCI_getBlock
+        mva     #$60    cnt
+        mva     #$28    a3
+        mwa     #CIN_frame1     CCI_putByte_80+1
+        mwa     #0      a0
+CCI_loadImage_2
+        jsr     CCI_getByte
+        tax
+        bmi     CCI_loadImage_3
+CCI_loadImage_4
+        jsr     CCI_getByte
+        jsr     CCI_putByte_80
+        dex:bpl CCI_loadImage_4
+        bmi     CCI_loadImage_5 !
+CCI_loadImage_3
+        and:tax #$7f
+        jsr     CCI_getByte
+        sta     a3+1
+CCI_loadImage_6
+        lda     a3+1
+        jsr     CCI_putByte_80
+        dex:bpl CCI_loadImage_6
+CCI_loadImage_5
+        inw     a0
+        lda     a0
+        cmp     CCI_temp
+        bne     CCI_loadImage_2
+        lda     a0+1
+        cmp     CCI_temp+1
+        bne     CCI_loadImage_2
+
+        jsr     CCI_getBlock
+        mva     #$60    cnt
+        mva     #$28    a3
+        mwa     #CIN_frame1+$28 CCI_putByte_80+1
+        mwa     #0      a0
+CCI_loadImage_a
+        jsr     CCI_getByte
+        tax
+        bmi     CCI_loadImage_b
+CCI_loadImage_c
+        jsr     CCI_getByte
+        jsr     CCI_putByte_80
+        dex:bpl CCI_loadImage_c
+        bmi     CCI_loadImage_d !
+CCI_loadImage_b
+        and:tax #$7f
+        jsr     CCI_getByte
+        sta     a3+1
+CCI_loadImage_e
+        lda     a3+1
+        jsr     CCI_putByte_80
+        dex:bpl CCI_loadImage_e
+CCI_loadImage_d
+        inw     a0
+        lda     a0
+        cmp     CCI_temp
+        bne     CCI_loadImage_a
+        lda     a0+1
+        cmp     CCI_temp+1
+        bne     CCI_loadImage_a
+
+        jsr     CCI_getBlock
+        mva     #$c0    cnt
+        mva     #$28    a3
+        mwa     #CIN_frame2     CCI_putByte_40+1
+        mwa     #0      a0
+CCI_loadImage_2b
+        jsr     CCI_getByte
+        tax
+        bmi     CCI_loadImage_3b
+CCI_loadImage_4b
+        jsr     CCI_getByte
+        jsr     CCI_putByte_40
+        dex:bpl CCI_loadImage_4b
+        bmi     CCI_loadImage_5b        !
+CCI_loadImage_3b
+        and:tax #$7f
+        jsr     CCI_getByte
+        sta     a3+1
+CCI_loadImage_6b
+        lda     a3+1
+        jsr     CCI_putByte_40
+        dex:bpl CCI_loadImage_6b
+CCI_loadImage_5b
+        inw     a0
+        lda     a0
+        cmp     CCI_temp
+        bne     CCI_loadImage_2b
+        lda     a0+1
+        cmp     CCI_temp+1
+        bne     CCI_loadImage_2b
+
+        jsr     CCI_getBlock
+        mwa     #0      a0
+        sta     CCI_putByte+1
+        mva     >CIN_bright0    CCI_putByte+2
+CCI_loadImage_2c
+        jsr     CCI_getByte
+        tax
+        bmi     CCI_loadImage_3c
+CCI_loadImage_4c
+        jsr     CCI_getByte
+        jsr     CCI_putByte
+        dex:bpl CCI_loadImage_4c
+        bmi     CCI_loadImage_5c        !
+CCI_loadImage_3c
+        and:tax #$7f
+        jsr     CCI_getByte
+        sta     a3+1
+CCI_loadImage_6c
+        lda     a3+1
+        jsr     CCI_putByte
+        dex:bpl CCI_loadImage_6c
+CCI_loadImage_5c
+        inw     a0
+        lda     a0
+        cmp     CCI_temp
+        bne     CCI_loadImage_2c
+        lda     a0+1
+        cmp     CCI_temp+1
+        bne     CCI_loadImage_2c
+        jsr     closeImage_1
+
+CCI_putByte_80
+        sta     $4100
+        lda     #80
+        add:sta CCI_putByte_80+1
+        scc:inc CCI_putByte_80+2
+        dec     cnt
+        bne     CCI_putByte_ret
+        mva     #$60    cnt
+        inc     CCI_putByte_80+1
+        dec     a3
+        mva     >CIN_frame1     CCI_putByte_80+2
+CCI_putByte_ret
+        rts
+
+CCI_putByte_40
+        sta     $6100
+        lda     #40
+        add:sta CCI_putByte_40+1
+        scc:inc CCI_putByte_40+2
+        dec     cnt
+        bne     CCI_putByte_ret_2
+        mva     #$c0    cnt
+        inc     CCI_putByte_40+1
+        dec     a3
+        mva     >CIN_frame2     CCI_putByte_40+2
+CCI_putByte_ret_2
+        rts
+
+CCI_putByte
+        sta     $8800
+        inw     CCI_putByte+1
+        rts
+
+CCI_getBlock
+        ldx     #$10
+        mwa     #2      $0348,x
+        jsr     $e456
+        jmi     errorx
+        mwa     CCI_temp        $0348,x
+        jsr     $e456
+        jmi     errorx
+        mwa     #CCI_temp+2     CCI_getByte+1
+        rts
+
+CCI_getByte
+        lda     CCI_temp
+        inw     CCI_getByte+1
+        rts
+
+* ----------------------------------------------------------------- Type: PLM
+; Plama 256
+
+PLM_frame       equ     $4100
+
+PLM_loadImage
+        jsr     loadStandardFrame
+        jmp     closeImage
+
+PLM_makeDisplayList
+        jsr     initDList
+        lda     #$70
+:2      jsr     storeDList1
+        lda     #$f0
+        jsr     storeDList1
+        ldx     #$c0
+
+PLM_makeDList_loop
+        lda     #$4f
+        jsr     storeDList1
+        lda     a1
+        jsr     storeDList1
+        lda     a1+1
+        add     >PLM_frame
+        jsr     storeDList1
+        jsr     nextDListLine
+
+        dex:bne PLM_makeDList_loop
+        lda     #$41
+        jsr     storeDList1
+        lda     <dl1
+        jsr     storeDList1
+        lda     >dl1
+        jmp     storeDList1
+
+PLM_showImage
+        mva     #0      $022f
+        sta     $02c8
+        jsr     waitFrame
+        jsr     setDisplay
+        mwa     #PLM_dli_1      $0200
+        mva     #1      $026f
+        asl     ^4e
+        jmp     showImage_all
+
+PLM_dli_1
+        pha
+        txa:pha
+        ldx     #$00
+PLM_dli_11
+        lda     #$c0
+        sta     ^4a
+        sta     ^1b
+        lda     #$40
+        sta     ^4a
+        sta     ^1b
+        inx:cpx #$60
+        bne     PLM_dli_11
+        pla:tax
+        pla:rti
+
+wdthtxt_        dta     c'width: '
+hghttxt_        dta     c'height:'
+clrstxt_        dta     c'colors:'
+bplntxt_        dta     c'planes:'
+
+msgViewKeys     dta     c'  TAB - view  '
+msgSelectFile   dta     c'  Select file '
+msgLoading      dta     c'  Loading...   '
+msgError        dta     c' I/O Error- '
+errorNum        dta     c'   '
+msgDirectory    dta     c' 1-9, SPC - dir '
+
+extensions      dta     c'TIP GR8 GR9 MIC PIC INP HIP CIN CCI PLM '
+EXTS    equ     *-extensions
+
+extWidth        dta     160,000,080,160,160,160,160,160,160,080
+extHeight       dta     000,192,192,192,192,200,200,192,192,096
+extColors       dta     255,001,015,003,003,006,015,127,127,255
+extPlanes       dta     003,001,001,001,001,002,002,002,002,002
+
+loadImageVec_l  dta     l(TIP_loadImage)
+                dta     l(GR8_loadImage)
+                dta     l(GR9_loadImage)
+                dta     l(MIC_loadImage)
+                dta     l(PIC_loadImage)
+                dta     l(INP_loadImage)
+                dta     l(HIP_loadImage)
+                dta     l(CIN_loadImage)
+                dta     l(CCI_loadImage)
+                dta     l(PLM_loadImage)
+loadImageVec_h  dta     h(TIP_loadImage)
+                dta     h(GR8_loadImage)
+                dta     h(GR9_loadImage)
+                dta     h(MIC_loadImage)
+                dta     h(PIC_loadImage)
+                dta     h(INP_loadImage)
+                dta     h(HIP_loadImage)
+                dta     h(CIN_loadImage)
+                dta     h(CCI_loadImage)
+                dta     h(PLM_loadImage)
+showImageVec_l  dta     l(TIP_showImage)
+                dta     l(GR8_showImage)
+                dta     l(GR9_showImage)
+                dta     l(MIC_showImage)
+                dta     l(MIC_showImage)
+                dta     l(INP_showImage)
+                dta     l(HIP_showImage)
+                dta     l(CIN_showImage)
+                dta     l(CIN_showImage)
+                dta     l(PLM_showImage)
+showImageVec_h  dta     h(TIP_showImage)
+                dta     h(GR8_showImage)
+                dta     h(GR9_showImage)
+                dta     h(MIC_showImage)
+                dta     h(MIC_showImage)
+                dta     h(INP_showImage)
+                dta     h(HIP_showImage)
+                dta     h(CIN_showImage)
+                dta     h(CIN_showImage)
+                dta     h(PLM_showImage)
+makeDListVec_l  dta     l(TIP_makeDisplayList)
+                dta     l(GR8_makeDisplayList)
+                dta     l(GR8_makeDisplayList)
+                dta     l(MIC_makeDisplayList)
+                dta     l(MIC_makeDisplayList)
+                dta     l(INP_makeDisplayList)
+                dta     l(HIP_makeDisplayList)
+                dta     l(CIN_makeDisplayList)
+                dta     l(CIN_makeDisplayList)
+                dta     l(PLM_makeDisplayList)
+makeDListVec_h  dta     h(TIP_makeDisplayList)
+                dta     h(GR8_makeDisplayList)
+                dta     h(GR8_makeDisplayList)
+                dta     h(MIC_makeDisplayList)
+                dta     h(MIC_makeDisplayList)
+                dta     h(INP_makeDisplayList)
+                dta     h(HIP_makeDisplayList)
+                dta     h(CIN_makeDisplayList)
+                dta     h(CIN_makeDisplayList)
+                dta     h(PLM_makeDisplayList)
+
+updir   dta     c' :<            '
+subdirMask      dta     c'>*.*',$9b
+en      dta     c'E:',$9b
+dirname dta     c'D1:*.*',$9b
+        org     *+120
+
+filenam org     *+120
+fname   org     *+16
+head    org     *+3
+ver     org     *+1
+cpr     org     *+1
+width   org     *+1
+height  org     *+1
+fsize   org     *+2
+        org     *+32
+fnamebuf equ *
+
+        org     $8000
+dl1     org     *+1024
+dl2     org     *+1024
+
+        run     tipViewer
+        end
