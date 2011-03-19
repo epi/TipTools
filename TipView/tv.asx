@@ -1,4 +1,25 @@
-; tipview v1.0 by epi/trs^o.s.
+;
+; TipView - image viewer for Atari XL/XE computers
+;
+; Copyright (C) 2004-2011  Adrian Matoga
+;
+; This file is part of TipTools,
+; see http://epi.atari8.info/tiptools.php
+;
+; TipView is free software; you can redistribute it and/or modify it
+; under the terms of the GNU General Public License as published
+; by the Free Software Foundation; either version 2 of the License,
+; or (at your option) any later version.
+;
+; TipConv is distributed in the hope that it will be useful,
+; but WITHOUT ANY WARRANTY; without even the implied warranty
+; of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+; See the GNU General Public License for more details.
+;
+; You should have received a copy of the GNU General Public License
+; along with TipConv; if not, write to the Free Software Foundation, Inc.,
+; 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+;
 
         org     $80
 a0      org     *+2
@@ -13,6 +34,7 @@ isLoaded org    *+1
 fpos    org     *+1
 fdpos   org     *+1
 mode    org     *+1
+interactive org *+1
 
         org     $8c00
 
@@ -22,7 +44,11 @@ maindl  dta     d'ppppppp'
         dta     $c2,a(mainsc),$30,2,2,2,2,2,2,2,2,2,2,2,2,$82,$30,2
         dta     $41,a(maindl)
                                                    
-mainsc  dta     c'  TIPview v1.0 by Epi/Trs^O.S.  '
+mainsc  dta     c'  TIPview v'
+        dta     '0'+VERSION_MAJOR
+        dta     '.'
+        dta     '0'+VERSION_MINOR
+        dta     c' by Epi/Trs^O.S.  '
 screen  org     *+48
 dirmask org     *+12
         org     *+54
@@ -43,11 +69,179 @@ bplnnum org     *+6                  7
         org     *+16
 msgtxt  org     *+16                 15
         org     *+32                 16
-        dta     c'  freeware  (c) 2004 Tristesse  '
+        dta     c' http://github.com/epi/TipTools '
+
+COMTAB  equ     0               ;DOS entry jump	vector
+ZCRNAME equ     3               ;file name crunch routine jump vector
+BUFOFF  equ     10              ;next parameter	buffer offset
+COMFNAM equ     33              ;destination buffer for	crunch routine
+LBUF    equ     63              ;command line input buffer
 
 tipViewer
-        mva     #0      isLoaded
-        sta     files
+; detect DOS
+        lda     $0700
+        cmp     #'S'              ; "S" (SpartaDOS)
+        beq     tipViewerCmdLine_0
+
+        ldy     #COMTAB
+        lda     #$4C
+        cmp     ($0a),y
+        bne     tipViewerNoCmdLine_jmp
+
+        ldy     #ZCRNAME
+        cmp     ($0a),y
+        bne     tipViewerNoCmdLine_jmp
+
+        ldy     #6                 ; OS/A+ has a jmp here
+        cmp     ($0a),y
+        bne     tipViewerCmdLine_0
+
+tipViewerNoCmdLine_jmp
+        jmp     tipViewerNoCmdLine
+
+; try to read SpartaDOS or DOS XL command line
+tipViewerCmdLine_0
+        ldy     #10
+        ldx     #0
+        lda     ($0a),y
+        add     #63
+        tay
+tipViewerCmdLine_1
+        mva     ($0a),y+        cmdline,x+
+        cpy     #127
+        beq     tipViewerNoCmdLine_jmp
+        cmp     #$9b
+        bne     tipViewerCmdLine_1
+
+tipViewerCmdLine
+; Get default device (LBUF will be destroyed!!)
+
+        ldy     #BUFOFF
+        mva     #0      ($0a),y         ; reset buffer offset
+
+; Store dummy argument
+
+        ldy     #LBUF
+        mva     #'X'    ($0a),y
+        iny
+        mva     #$9b    ($0a),y
+
+; One extra store to avoid the buggy sequence from OS/A+ DOS:
+; <D><RETURN><:> => drive number = <RETURN>
+
+        iny
+        sta     ($0a),y
+
+; Create crunch vector
+
+        ldy     #ZCRNAME+1
+        mva     ($0a),y crunchVector+1
+        iny
+        mva     ($0a),y crunchVector+2
+
+crunchVector
+        jsr     $FFFF           ; will be set to crunch vector
+
+; Get default device
+
+        ldy     #COMFNAM        ;  COMFNAM is always "Dn:"
+        iny
+        mva     ($0a),y filenam+1
+        mva     #'D'    filenam
+
+; skip spaces
+        ldx #$FF
+tipViewerCmdLine_2
+        inx
+        lda cmdline,x
+        cmp #' '
+        beq tipViewerCmdLine_2
+        lda cmdline,x
+        cmp #$9B
+        jeq tipViewerNoCmdLine ; empty line
+; ?:* => D?:*
+        lda cmdline+1,x
+        cmp #':'
+        bne tipViewerCmdLine_3
+        lda cmdline,x
+        sta filenam+1
+        ldy #1
+        bne tipViewerCmdLine_go   !
+; ??:* => ??:*
+tipViewerCmdLine_3
+        lda cmdline+2,x
+        cmp #':'
+        bne tipViewerCmdLine_4
+        lda cmdline+1,x
+        sta filenam+1
+        ldy #0
+        beq tipViewerCmdLine_go   !
+tipViewerCmdLine_4
+        lda #':'
+        sta filenam+2
+        ldy #3
+; copy name, converting to uppercase
+tipViewerCmdLine_go
+        lda cmdline,x
+        cmp #'z'+1
+        bcs tipViewerCmdLine_5
+        cmp #'a'
+        bcc tipViewerCmdLine_5
+        sbc #'a'-'A'
+tipViewerCmdLine_5
+        sta filenam,y
+        cmp #$9B
+        beq tipViewerCmdLine_done
+        cmp #' '
+        beq tipViewerCmdLine_done
+        inx
+        iny
+        cpy #120
+        bne tipViewerCmdLine_go
+        beq tipViewerNoCmdLine   !
+
+; check file format
+tipViewerCmdLine_done
+        dey
+        ldx #EXTS-1
+tipViewerCmdLine_ext
+        dex
+        lda     filenam,y
+        cmp     extensions,x
+        bne     tipViewerCmdLine_extNext
+        lda     filenam-1,y
+        cmp     extensions-1,x
+        bne     tipViewerCmdLine_extNext
+        lda     filenam-2,y
+        cmp     extensions-2,x
+        bne     tipViewerCmdLine_extNext
+        beq     tipViewerCmdLine_extFound
+tipViewerCmdLine_extNext
+        dex
+        dex
+        dex
+        bpl     tipViewerCmdLine_ext
+        bmi     tipViewerNoCmdLine !
+tipViewerCmdLine_extFound
+        txa
+:2      lsr     @
+
+tipViewerLoadOne
+        ldx     #0
+        stx     interactive
+        jsr     initImage
+        jsr     waitFrame
+        jsr     showImage
+        lsr     ^4e
+        jmp     exitToDos
+        jmp     ($0a)
+
+; DOS doesn't support command line params or no params specified
+tipViewerNoCmdLine
+        mvx     #0      isLoaded
+        stx     files
+        inx     #1
+        stx     interactive
         lda     $0301
         ora     #'0'
         sta     dirname+1
@@ -282,6 +476,8 @@ initImage
         jmp     makeDisplayList
 
 loadImage
+        lda     interactive
+                beq     loadImage_go
         ldx     <msgLoading
         ldy     >msgLoading+1
         jsr     displayMessage
@@ -298,11 +494,14 @@ loadImage_3
         mva     fname,y+        filenam,x+
         cmp     #$9b
         bne     loadImage_3
+loadImage_go
         ldx     #16
         mva     #3      $0342,x
         mwa     #filenam $0344,x
         mva     #4      $034a,x
         jsr     cio
+        lda     interactive
+        beq     openImage
         lda     mode
         seq:jsr displayImageInfo
 openImage       jmp     $0000
@@ -582,17 +781,17 @@ error3  jsr     changeDisk
 
 displayBcdNumber
         mwa     #0      a1
-	ldx     #8
-	sed
+        ldx     #8
+        sed
 m_14    asl     a3
         lda:adc a1
         sta     a1
         rol     a1+1
-	dex:bne m_14
-	cld
-	ldy     #2
+        dex:bne m_14
+        cld
+        ldy     #2
         lda     a1
-	jsr     pbcd2
+        jsr     pbcd2
         lda     a1+1
         jsr     pbcd1
         lda     (a2),0
@@ -641,13 +840,13 @@ displayDirRet
         rts
 
 pbcd2   pha
-	jsr     pbcd1
-	pla
+        jsr     pbcd1
+        pla
 :4      lsr     @
 pbcd1   and     #%00001111
-	ora     #'0'
+        ora     #'0'
         sta     (a2),y-
-	rts
+        rts
 
 getkey  lda     #$ff
 getkey2 ldx     #0
@@ -1769,6 +1968,7 @@ cpr     org     *+1
 width   org     *+1
 height  org     *+1
 fsize   org     *+2
+cmdline org     *+120
         org     *+32
 fnamebuf equ *
 
