@@ -50,7 +50,7 @@ class PalColorConverter : ColorConverter
 			+ YuvWeight.Blue * gammaDecode_[rgb.blue]) >> 16;
 		auto u = (YuvWeight.U * (gammaDecode_[rgb.blue] - lum)) >> 16;
 		auto v = (YuvWeight.V * (gammaDecode_[rgb.red] - lum)) >> 16;
-		auto sat = cast(uint) sqrt(v * v + u * u);
+		auto sat = cast(uint) sqrt(cast(float) (v * v + u * u));
 		auto phi = atan2(cast(double) v, cast(double) u);
 		if (phi < 0)
 			phi += 2.0 * PI;
