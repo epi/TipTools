@@ -20,7 +20,7 @@
 
 XEDISK := xedisk
 
-all: tc2 andy.png satur.png test.atr
+all: tc2 andy.png satur.png
 .PHONY: all
 
 tc2: tc2.d image.d colors.d palconv.d tip.d pngread.o
