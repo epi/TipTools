@@ -43,7 +43,7 @@ font    ins     'neo6.fnt'
 maindl  dta     d'ppppppp'
         dta     $c2,a(mainsc),$30,2,2,2,2,2,2,2,2,2,2,2,2,$82,$30,2
         dta     $41,a(maindl)
-                                                   
+
 mainsc  dta     c'  TIPview v'
         dta     '0'+VERSION_MAJOR
         dta     '.'
@@ -537,7 +537,7 @@ tipv0f  tya:tax
 tipv10  mva     (a1),y+      fname,x+
         cpy     #11
         bne     tipv10
-        mva     #155    fname,x+        
+        mva     #155    fname,x+
         rts
 
 getkeyv jsr     getkey
@@ -714,7 +714,7 @@ displayDirMask
         lda     #$9b
 displayDirMask_1
         iny:cmp dirname,y
-        bne     displayDirMask_1        
+        bne     displayDirMask_1
         cpy     #16
         bcs     displayDirMask_2
         tya:lsr @
@@ -826,7 +826,7 @@ displayDirectory
         beq     displayDirRet
         dex:cpx #11
         bcc     displayDirLoop
-        ldx     #10     
+        ldx     #10
 displayDirLoop
         ldy     #10
         mva:rpl (a1),y (a2),y-
@@ -883,7 +883,7 @@ initDList
 
 storeDListx
         jsr     storeDList2
- 
+
 storeDList1
         sta     dl1
         inw     storeDList1+1
@@ -1126,7 +1126,7 @@ GR8_makeDisplayList_C0
         mva     #$41    dl1+3+3+95+3+95
         mwa     #dl1    dl1+3+3+95+3+95+1
         ldy     #94
-        txa:and #$0f    
+        txa:and #$0f
 GR8_makeDisplayList_1
         sta     dl1+3+3,y
         sta     dl1+3+3+95+3,y
@@ -1188,7 +1188,7 @@ MIC_loadImage_2
         jmp     closeImage_1
 
 MIC_makeDisplayList
-        ldx     #$4e 
+        ldx     #$4e
         jmp     GR8_makeDisplayList_C0
 
 MIC_showImage
