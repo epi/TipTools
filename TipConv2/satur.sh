@@ -24,8 +24,7 @@ rm -f lenna2-st-???.tip lenna2-st-???.png && (
 for thresh in 001 004 008 016 024 032 040 048 064;
 do
 	./tc2 -t $thresh -o lenna2-st-$thresh.tip lenna2.png
-	fail2png -o lenna2-st-$thresh.png lenna2-st-$thresh.tip
+	recoil2png -o lenna2-st-$thresh.png lenna2-st-$thresh.tip
 done ) && \
 montage lenna2-st-???.png satur.png && \
 rm -f lenna2-st-???.tip lenna2-st-???.png
-
