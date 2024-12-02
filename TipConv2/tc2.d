@@ -23,7 +23,7 @@ import std.stdio;
 import std.file;
 import std.string;
 import std.conv;
-import std.c.stdlib;
+import core.stdc.stdlib;
 
 import image;
 import palconv;
@@ -122,4 +122,3 @@ Options (default values in parentheses):
 	}
 	return 0;
 }
-

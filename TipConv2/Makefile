@@ -1,5 +1,5 @@
 #	Makefile - build rules for TipConv
-# 
+#
 #	Copyright (C) 2008-2012 Adrian Matoga
 #
 #	This file is part of TipConv, see http://epi.atari8.info/tiptools.php
@@ -24,7 +24,7 @@ all: tc2 andy.png satur.png
 .PHONY: all
 
 tc2: tc2.d image.d colors.d palconv.d tip.d pngread.o
-	dmd $^ -unittest -debug -of$@
+	dmd $^ -debug -of$@
 
 pngread.o: pngread.c
 	gcc -O2 -Wall -c $< -o $@
@@ -51,8 +51,8 @@ gamma220.tip: lenna2.png tc2
 	./tc2 -o $@ -t 0 -g 2.2 $<
 
 test.atr: tv.xex gamma100.tip gamma130.tip gamma160.tip gamma190.tip gamma220.tip
-	$(XEDISK) n $@ -Fmydos -s720 && \
-	$(XEDISK) b $@ -d450 && \
+	$(XEDISK) n $@ -f mydos -s720 && \
+	$(XEDISK) b $@ -D 450 && \
 	$(XEDISK) a $@ $^
 
 clean:
