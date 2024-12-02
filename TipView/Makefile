@@ -6,15 +6,15 @@ ATRNAME = tipview-$(VERSION).atr
 
 XASM = xasm
 XEBIN = xebin
-XEDISK = xedisk 
+XEDISK = xedisk
 ZIP = 7z a -mx=9 -tzip $@
 RM = rm -f
 
 all: $(ATRNAME)
 
 $(ATRNAME): tv.xex
-	$(XEDISK) n $(ATRNAME) -Fmydos -s720
-	$(XEDISK) b $(ATRNAME) -d450
+	$(XEDISK) n $(ATRNAME) -f mydos -s 720
+	$(XEDISK) write-dos $(ATRNAME) -D 450
 	$(XEDISK) a $(ATRNAME) tv.xex
 
 tv.xex: tv.obx
